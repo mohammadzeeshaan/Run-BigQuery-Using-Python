@@ -1,0 +1,83 @@
+# -----------------------------
+# Import Libraries
+# -----------------------------
+from google.cloud import bigquery
+from tabulate import tabulate
+import pandas as pd
+
+# -----------------------------
+# Authenticate & Initialize Client
+# -----------------------------
+service_account_JSON = r'C:\Users\hp\Downloads\practice-467502-09621825f81e.json'
+client = bigquery.Client.from_service_account_json(service_account_JSON)
+
+# -----------------------------
+# Create Dataset
+# -----------------------------
+dataset_id = 'practice-467502.dataset_python'
+dataset = bigquery.Dataset(dataset_id)
+dataset.location = 'US'
+dataset.description = 'Dataset created from Python script'
+
+# Create the dataset
+dataset_ref = client.create_dataset(dataset, timeout=30)
+print(f"Created dataset {client.project}.{dataset_ref.dataset_id}")
+
+# -----------------------------
+# Create Table & Load CSV
+# -----------------------------
+table_id = 'practice-467502.dataset_python.table_python'
+
+job_config = bigquery.LoadJobConfig(
+    schema=[
+        bigquery.SchemaField("Party Name", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("Party Type", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("Party Type Abbreviation", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("State Name", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("Total Valid Votes Polled In State", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("Total Electors In The State", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("Seat Won", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("Total Valid Votes Polled By Party", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("Percentage_%_Of Valid Votes Polled By Party", "FLOAT", mode="REQUIRED")
+    ],
+    source_format=bigquery.SourceFormat.CSV,
+    skip_leading_rows=1
+)
+
+file_path = r"C:\Users\hp\Downloads\Indian GE 2024 - Party Wise Performance.csv"
+
+# Use context manager to handle file
+with open(file_path, 'rb') as source_file:
+    job = client.load_table_from_file(source_file, table_id, job_config=job_config)
+
+job.result()  # Wait for the job to complete
+
+table = client.get_table(table_id)
+print(f"Loaded {table.num_rows} rows into {table_id}")
+
+# -----------------------------
+# Query and Display Table
+# -----------------------------
+query_to_run = "SELECT * FROM `practice-467502.dataset_python.table_python`"
+
+# Run the query
+query_job = client.query(query_to_run)
+results = query_job.result()
+
+# Format results using tabulate
+rows = [list(row.values()) for row in results]
+headers = [field.name for field in results.schema]
+
+print(tabulate(rows, headers=headers, tablefmt="grid"))
+
+# Print each row as dictionary
+for row in results:
+    print(dict(row))
+
+print("Script run completed.")
+
+# -----------------------------
+# Load into DataFrame & Display
+# -----------------------------
+df = client.query(query_to_run + " LIMIT 50").to_dataframe()
+print(df)
